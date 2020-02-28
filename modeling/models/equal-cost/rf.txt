@@ -1,0 +1,186 @@
+=== Run information ===
+
+Scheme:       weka.classifiers.meta.FilteredClassifier -F "weka.filters.unsupervised.attribute.Remove -R 1,13,56" -S 1 -W weka.classifiers.trees.RandomForest -- -P 100 -I 100 -num-slots 1 -K 0 -M 1.0 -V 0.001 -S 1
+Relation:     epit.train
+Instances:    25900
+Attributes:   68
+              ID
+              PP1.1
+              PP2.1
+              PP3.1
+              KF1.1
+              KF2.1
+              KF3.1
+              KF4.1
+              KF5.1
+              KF6.1
+              KF7.1
+              KF8.1
+              KF9.1
+              KF10.1
+              Z1.1
+              Z2.1
+              Z3.1
+              Z4.1
+              Z5.1
+              F1.1
+              F2.1
+              F3.1
+              F4.1
+              F5.1
+              F6.1
+              T1.1
+              T2.1
+              T3.1
+              T4.1
+              T5.1
+              VHSE1.1
+              VHSE2.1
+              VHSE3.1
+              VHSE4.1
+              VHSE5.1
+              VHSE6.1
+              VHSE7.1
+              VHSE8.1
+              ProtFP1.1
+              ProtFP2.1
+              ProtFP3.1
+              ProtFP4.1
+              ProtFP5.1
+              ProtFP6.1
+              ProtFP7.1
+              ProtFP8.1
+              ST1.1
+              ST2.1
+              ST3.1
+              ST4.1
+              ST5.1
+              ST6.1
+              ST7.1
+              ST8.1
+              BLOSUM1.1
+              BLOSUM2.1
+              BLOSUM3.1
+              BLOSUM4.1
+              BLOSUM5.1
+              BLOSUM6.1
+              BLOSUM7.1
+              BLOSUM8.1
+              BLOSUM9.1
+              BLOSUM10.1
+              MSWHIM1.1
+              MSWHIM2.1
+              MSWHIM3.1
+              Class
+Test mode:    10-fold cross-validation
+
+=== Classifier model (full training set) ===
+
+FilteredClassifier using weka.classifiers.trees.RandomForest -P 100 -I 100 -num-slots 1 -K 0 -M 1.0 -V 0.001 -S -1754890201 on data filtered through weka.filters.unsupervised.attribute.Remove -R 1,13,56
+
+Filtered Header
+@relation 'epit.train-weka.filters.unsupervised.attribute.Remove-R1,13,56'
+
+@attribute PP1.1 numeric
+@attribute PP2.1 numeric
+@attribute PP3.1 numeric
+@attribute KF1.1 numeric
+@attribute KF2.1 numeric
+@attribute KF3.1 numeric
+@attribute KF4.1 numeric
+@attribute KF5.1 numeric
+@attribute KF6.1 numeric
+@attribute KF7.1 numeric
+@attribute KF8.1 numeric
+@attribute KF10.1 numeric
+@attribute Z1.1 numeric
+@attribute Z2.1 numeric
+@attribute Z3.1 numeric
+@attribute Z4.1 numeric
+@attribute Z5.1 numeric
+@attribute F1.1 numeric
+@attribute F2.1 numeric
+@attribute F3.1 numeric
+@attribute F4.1 numeric
+@attribute F5.1 numeric
+@attribute F6.1 numeric
+@attribute T1.1 numeric
+@attribute T2.1 numeric
+@attribute T3.1 numeric
+@attribute T4.1 numeric
+@attribute T5.1 numeric
+@attribute VHSE1.1 numeric
+@attribute VHSE2.1 numeric
+@attribute VHSE3.1 numeric
+@attribute VHSE4.1 numeric
+@attribute VHSE5.1 numeric
+@attribute VHSE6.1 numeric
+@attribute VHSE7.1 numeric
+@attribute VHSE8.1 numeric
+@attribute ProtFP1.1 numeric
+@attribute ProtFP2.1 numeric
+@attribute ProtFP3.1 numeric
+@attribute ProtFP4.1 numeric
+@attribute ProtFP5.1 numeric
+@attribute ProtFP6.1 numeric
+@attribute ProtFP7.1 numeric
+@attribute ProtFP8.1 numeric
+@attribute ST1.1 numeric
+@attribute ST2.1 numeric
+@attribute ST3.1 numeric
+@attribute ST4.1 numeric
+@attribute ST5.1 numeric
+@attribute ST6.1 numeric
+@attribute ST7.1 numeric
+@attribute ST8.1 numeric
+@attribute BLOSUM1.1 numeric
+@attribute BLOSUM3.1 numeric
+@attribute BLOSUM4.1 numeric
+@attribute BLOSUM5.1 numeric
+@attribute BLOSUM6.1 numeric
+@attribute BLOSUM7.1 numeric
+@attribute BLOSUM8.1 numeric
+@attribute BLOSUM9.1 numeric
+@attribute BLOSUM10.1 numeric
+@attribute MSWHIM1.1 numeric
+@attribute MSWHIM2.1 numeric
+@attribute MSWHIM3.1 numeric
+@attribute Class {Negative,Positive}
+
+@data
+
+
+Classifier Model
+RandomForest
+
+Bagging with 100 iterations and base learner
+
+weka.classifiers.trees.RandomTree -K 0 -M 1.0 -V 0.001 -S -1754890201 -do-not-check-capabilities
+
+Time taken to build model: 57.36 seconds
+
+=== Stratified cross-validation ===
+=== Summary ===
+
+Correctly Classified Instances       20939               80.8456 %
+Incorrectly Classified Instances      4961               19.1544 %
+Kappa statistic                          0.6169
+Mean absolute error                      0.3787
+Root mean squared error                  0.4054
+Relative absolute error                 75.7537 %
+Root relative squared error             81.0832 %
+Total Number of Instances            25900     
+
+=== Detailed Accuracy By Class ===
+
+                 TP Rate  FP Rate  Precision  Recall   F-Measure  MCC      ROC Area  PRC Area  Class
+                 0.810    0.194    0.811      0.810    0.811      0.617    0.887     0.882     Negative
+                 0.806    0.190    0.806      0.806    0.806      0.617    0.887     0.876     Positive
+Weighted Avg.    0.808    0.192    0.808      0.808    0.808      0.617    0.887     0.879     
+
+=== Confusion Matrix ===
+
+     a     b   <-- classified as
+ 10617  2483 |     a = Negative
+  2478 10322 |     b = Positive
+

@@ -1,0 +1,325 @@
+#+TITLE: Modelling Protein Sequences To Predict Positive Epitopes
+#+AUTHOR: Matthew Barber & Dhillon Patel
+#+latex_header: \hypersetup{hidelinks}
+#+latex_header: \usepackage[nottoc,notlot,notlof]{tocbibind}
+
+* TODO Abstract
+  The abstract should be one paragraph, usually between 100-150 words. It should briefly describe the main tasks of the report, the models tested, final models selected, and the performance obtained for the two tasks on the test set.
+* TODO Introduction
+  A short introduction explaining the main objective of this data mining exercise, briefly describing the problem that will be addressed and any other background information that may be relevant for the reader to understand the report.
+* Exploratory Data Analysis
+  The original training set consisted of 30,000 instances with 68 attributes.
+
+  An ~ID~ string attribute was provided, uniquely identify the protein sequence. A ~Class~ attribute determined whether the protein sequence was either a Positive or Negative epitope. The other 66 attributes were properties of the protein sequence, all numeric.
+
+** Numeric distributions
+   The values of all the properties can visually be seen to follow a Guassian distribution, only varying in skewness.
+
+   Both the Shapiro-Welk cite:shapiro1965analysis and D'Agostino's K^2 cite:d1990suggestion normality tests identify attribute ~F5.1~ to least fail in rejecting the null hypothesis of Gaussian distribution, but a histogram plot visually suggest it follows a Gaussian distribution.
+
+   #+CAPTION: Histogram of ~F5.1~. Colours represent the ~Class~ (the epitope sign) divide in each bin, where red is Positive and blue is Negative.
+   [[./images/histogram_F5.1.png]]
+
+** Missing values
+   6 instances had missing values for all attributes except for ~ID~ and ~Class~.
+
+   Ignoring those instances, the only missing values for instances occured in the ~KF9.1~ and ~BLOSUM2.1~ attributes. For both attributes, values were missing more often than present.
+
+   #+CAPTION: Count of how many instances had missing values in the attributes ~KF9.1~ and ~BLOSUM2.1~.
+   #+LABEL: table:missing
+   | Attribute | Missing occruences |
+   |-----------+--------------------|
+   | KF9.1     | 22,513 (75%)       |
+   | BLOSUM2.1 | 27,010 (90%)       |
+
+** Duplicate records
+   6323 ~ID~ values were identified to be present in more than 1 instance in the training set. 
+
+   All sets of instances with the same ~ID~ had the same values for most other attributes. The exceptions were ~KF9.1~ and ~BLOSSUM2.1~ where some instances would have missing values instead, and ~Class~ where instances could differ in being a Positive or Negative epitope.
+   
+   #+CAPTION: For example, every instance where ~ID~ was /QFPGFKEVRLVPGRH/ in training set's ARFF file. The only differences in the instances were in ~KF9.1~ and ~Class~ attribute value, with the first four instances being exactly the same.
+   | Line no. | KF9.1 | Class    |
+   |----------+-------+----------|
+   |      717 | ?     | Negative |
+   |     2175 | ?     | Negative |
+   |     2330 | ?     | Negative |
+   |     6681 | ?     | Negative |
+   |    25417 | 0.12  | Positive |
+   |    29518 | 0.12  | Negative |
+
+   As well as instances in these sets being near-identical, we can determine these instances as duplicates because the ~ID~ represents a unique protein sequence.
+
+** Numeric outliers
+   We determined attribute values as outliers accordining to whether they were outside the range $Q1 - 3 \times IQR$ to $Q3 + 3 \times IQR$, where $Q1$ and $Q3$ are the lower and upper quartiles, and $IQR$ is the interquartile range. The range variables are calculated using the respective attribute's distribution of all values.
+
+   For example, value $x$ would be considered an outlier if it met either of the following conditions:
+   \begin{align}
+   x < Q1 - 3 \times IQR\\
+   x > Q3 + 3 \times IQR 
+   \end{align}
+
+   Analysing outliers with the duplicate instances reduced would give insights less skewed by repeated values, so we cleaned our training set beforehand (as described in section [[*Duplicate reduction]]). 19,500 unique instances were present in this dataset.
+
+   53 attributes contained no outliers. Attribute ~F5.1~ had the highest outlier count of 187, with the  count sharply declining to 90 for ~BLOSUM6.1~.
+
+   #+CAPTION: The 5 attributes with the largest amount of outliers.
+   [[./images/outliers.png]]
+
+   The class distribution of the records with outliers was 242 Negative/192 Positive (a \sim{}1.3:1 ratio). For comparison, the total class balance was 13,100 Negative/6400 Positive (a \sim{}2:1 ratio).
+
+* Data Preprocessing
+  The steps outlined in [[*Remove missing records]] and [[*Duplicate reduction]] were achieved by an in-house Python script we made.
+
+  Everything else was done in Weka, where the attribute preprocessing in [[*Remove attributes]] and [[*Feature extraction]] was done via the ~FilteredClassifier~ meta classifier. This allowed for non-transformed test sets to still work with models that were made with transformed data.
+
+  #+CAPTION: Weka's ~FilteredClassifier~ used, using a ~MultiFiter~ to chain the attribute removal ([[*Remove attributes]]) and PCA ([[*Feature extraction]]) steps together. TODO not rendering
+  #+begin_src bash
+    weka.classifiers.meta.FilteredClassifier
+      -F "weka.filters.MultiFilter
+        -F \"weka.filters.unsupervised.attribute.Remove ...\"
+        -F \"weka.filters.unsupervised.attribute.PrincipalComponents ...\""
+      -S 1
+      -W <classifier>
+  #+end_src
+
+** Remove missing records
+   The 6 instances with missing values as described in [[*Missing values]] were removed.
+
+   #+CAPTION: Every record in the training set was filtered against a method that checks if all values except the ~ID~ (first index) and ~Class~ (last index) were missing.
+   #+begin_src python
+   def all_attrs_missing(record):
+       return all(value == '?' for value in record[1:-1])
+   ...
+   data = (record for record in data if not all_attrs_missing(record))
+   #+end_src
+
+** Duplicate reduction
+   A strategy was devised and implemented to reconstruct the duplicate records described in [[*Duplicate records]] into a single instance. This single instance contained the shared values of all duplicate records, plus the best-known information for the following attributes:
+
+   * ~KF9.1~, if present in any of the duplicate records.
+   * ~BLOSUM2.1~, if present in any of the duplicate records.
+   * ~Class~, determined by the majority value in the duplicate records.
+
+   As shown in listing [[code:analysis]], a check was done to see if non-missing values occuring in duplicate sets were different. The check never passed, establishing all present values were the same in every instance for each duplicate record set, so that we knew only the ~Class~ attribute differed between duplicate instances.
+
+   If there was an equal number of Positive and Negative values in a duplicate set, we instead opted to not reconstruct a single instance at all, and thus removed all instances completely. We determined that without a good indication of what class a protein sequence belonged to, the instances were useless for classification purposes. This is represented by the ~id_keep_strategy~ method in listing [[code:strategy]].
+
+    #+CAPTION: The tally for how many duplicate sets were reconstructed with a Positive or Negative class, or removed entirely.
+    | Reconstruction strategy             | Duplicate sets |
+    |-------------------------------------+----------------|
+    | Single instance with Positive class |            992 |
+    | Single instance with Negative class |           4554 |
+    | All instances removed               |            777 |
+
+   #+CAPTION: A table to store analysis results is represented as a dictionary of ~ID~ strings, mapped to ~Analysis~ objects that hold gathered information pertaining to our duplicate reduction requirements.
+   #+begin_src python
+     @dataclass
+     class ValueOccurences:
+         missing: int = 0
+         present: int = 0
+         value: str = '?'
+
+     @dataclass
+     class Analysis:
+         total_freq: int = 0
+         pos_freq: int = 0
+         neg_freq: int = 0
+         KF9_1: ValueOccurences = new ValueOccurences()
+         BLOSUM2_1: ValueOccurences = new ValueOccurences()
+     ...
+     analysis_results = defaultdict(Analysis)
+     for record in data:
+         analysis = analysis_results[record.ID]
+         analysis.total_freq += 1
+         ...
+   #+end_src
+
+   #+CAPTION: A tally of the Positive and Negative occurences in the ~Class~ field was made for every instance in a duplicate set. Any non-missing occurence of the ~KF9.1~ and ~BLOSUM2.1~ values were also recorded.  
+   #+LABEL: code:analysis
+   #+begin_src python
+     if record.Class == "Positive":
+         analysis.pos_freq += 1
+     elif record.Class == "Negative":
+         analysis.neg_freq += 1
+     ...
+     for attr in ['KF9_1', 'BLOSUM2_1']:
+         value = getattr(record, attr)
+         occurences = getattr(analysis, attr)
+         if value != '?':
+             if value != occurences.value:
+                 print(f"{record.ID} instances have different {attr} values")
+             occurences.value = value
+   #+end_src
+
+   #+CAPTION: The ~Class~ to be used in reconstruction (listing   [[code:reconstruct]]) is determined by which one is most frequent in the duplicate set. A balance between Positive and Negative class frequency results in no record being reconstructed at all.
+   #+LABEL: code:strategy
+   #+begin_src python
+     def id_keep_strategy(pos_freq, neg_freq):
+         if pos_freq == neg_freq:
+             return None
+         elif pos_freq > neg_freq:
+             return 'Positive'
+         elif neg_freq > pos_freq:
+             return 'Negative'
+     ...
+     majority_class = \
+         id_keep_strategy(analysis.pos_freq, analysis.neg_freq)
+     if majority_class is not None:
+         ...
+     #+end_src
+
+   #+CAPTION: Using the results of our analysis, duplicate instances are reduced to one record with the ~KF9.1~ and ~BLOSUM2.1~ values (if known) and the majority ~Class~ value.
+   #+LABEL: code:reconstruct
+   #+begin_src python
+     reduced_record = \
+         record.replace(
+             Class = majority_class,
+             KF9_1 = analysis.KF9_1.value,
+             BLOSUM2_1 = analysis.BLOSUM2_1.value
+         )
+     preprocessed_data.writerow(reduced_record)
+   #+end_src
+
+** Remove outliers
+   Whilst the class distribution of outlier values skewed \sim{}50% Postive when compared to the total class distribution, we determined our models would perform better by focusing on general trends rather than be potentially be made biased due to the skew from a minority of outliers.
+
+   #+CAPTION: The ~MultiFilter~ used to remove outliers, which involved first identifying the outliers with ~InterquartileRange~ and then removing instances which were classified as outliers in the generated outlier table. Note no "extreme values" were identified.
+   #+begin_src bash
+     weka.filters.MultiFilter
+       -F "weka.filters.unsupervised.attribute.InterquartileRange
+             -R 2-12,14-55,57-66 -O 3.0 -E 6.0 -do-not-check-capabilities"
+       -F "weka.filters.unsupervised.instance.RemoveWithValues
+             -S 0.0 -C 69 -L last"
+       -F "weka.filters.unsupervised.attribute.Remove -R 69-70"
+   #+end_src
+
+    We opted to keep the outliers for our Random Forests modelling, as we determined most of the decision tree algorithms used are robust to extreme values due to the use of inequalities expressions when branching decisions. The added training data of these outlier records with mostly non-outlier values would therefore be utilised without detriment.
+
+** Class balance
+   As mentioned in section [[*Numeric outliers]], the distribution of classes is inbalanced in the training set with 13,100 Negative records and 6400 Positive records, to make for a 2:1 ratio. Such an imbalance can be problematic for some classification models as they can overfit the majority class, leading to poorer performance when classifying new observations.
+
+   We decided to balance the training set by use of the SMOTE technique cite:chawla2002smote, which creates new synthetic records of the minority class by guessing the possible dimensions of records for said class. This estimation is essentially done by looking at existing points of the minority class which are neighbours, and fitting new points inbetween their features.
+
+   #+CAPTION: The ~SMOTE~ filter used in Weka. We had no inclination of how to appropiately pick a number of neighbours to be used (the ~-K~ parameter), so we used the default of 5 neighbours.
+   #+begin_src bash
+   weka.filters.supervised.instance.SMOTE -C 0 -K 5 -P 100.0 -S 1
+   #+end_src
+
+   We didn't balance the classes for our Logistic Regression modeling, as it can be sensitive to mismatches in the class balance of training and test data. We infered that more Negative epitopes are observed than Positive epitopes from the way our training set was distributed, so our model be disadvantaged if it wasn't modelled accordingly.
+
+   The ~SMOTE~ filter implementation in Weka had no option to ignore the attributes it's algorithm looks at, meaning it would fail to run without removing the ~ID~ attribute first. Therefore we forcibly applied the next step [[*Remove attributes]], ran the ~SMOTE~ filter, then artifically created the respective columns again all with missing values.
+
+** Remove attributes
+   Our duplicate reduction saw only a slight improvement in proportion of non-missing values in ~KF9.1~ and ~BLOSUM2.1~ attributes seen in table [[table:missing]], so we decided to remove these attributes. We determined that with a majority of both attribute's values missing, models would make false inferences of what class values of these features could suggest.
+
+   #+CAPTION: Count of how many instances in the duplicate reduced set had missing values in the attributes ~KF9.1~ and ~BLOSUM2.1~.
+   | Attribute | Missing occruences |
+   |-----------+--------------------|
+   | KF9.1     | 13,250 (68%)       |
+   | BLOSUM2.1 | 16,843 (86%)       |
+
+   Our classification methods did not involve the ~ID~ attribute and would fail to work regardless with string values, so it was removed as well.
+
+   #+CAPTION: Weka's ~Remove~ filter deletes these attributes via their column index.
+   #+begin_src bash
+     weka.filters.unsupervised.attribute.Remove -R 1,13,56
+   #+end_src
+
+** Feature extraction
+   We reduced features to our training data by way of Principal Component Analysis. This was to prevent models from biasing towards sets of features that strongly correlated with eachother—which is problematic as we assume these features represent similiar information—by essentially merging them.
+
+   The assumption of correlating features representing similiar information was bolstered by the fact a portion of these numeric attributes were the results of calculations from epitope properties.
+
+   #+CAPTION: Weka's ~PrincipalComponents~ filter creates Principle Components that represent 95 percent of all the features' variation. Data is automatically standardised beforehand.
+   #+begin_src bash
+     weka.filters.unsupervised.attribute.PrincipalComponents
+       -R 0.95 -A -1 -M -1
+   #+end_src
+
+   We opted to not use PCA for our Random Forests modelling, as similiar features do not disavantage decision trees, meaning the additional explainability of all features can be used to create more accurate predictions. Transformed data also takes away from the independence each voting decision tree has, due to the smaller number of inferences to be made.
+  
+   TODO dependent on preprocessing, but mostly similiar, for example...
+* Classification
+  For all our models, 10-fold cross validation was used to mitigate overfitting and fine tune the models parameters.
+
+  We selected the k value for our Naïve Bayes models via Weka's provided cross validation option, where values between 1 and 10 are all tested to see which one provided the best accuracy. In both instances, using only one neighbour was determined the most appropiate strategy.
+
+  #+CAPTION: The preprocessing steps used for each model
+  #+LABEL: table:steps
+  |           |                    | *NB*       | *kNN*      | *LR*       | *RF*       |
+  |-----------+--------------------+------------+------------+------------+------------|
+  | Instance  | Remove missing     | \checkmark | \checkmark | \checkmark | \checkmark |
+  |           | Reduce duplicates  | \checkmark | \checkmark | \checkmark | \checkmark |
+  |           | Remove outliers    | \checkmark | \checkmark | \checkmark |            |
+  |           | Balance classes    | \checkmark | \checkmark |            | \checkmark |
+  | Attribute | Remove attributes  | \checkmark | \checkmark | \checkmark | \checkmark |
+  |           | Feature extraction | \checkmark | \checkmark | \checkmark |            |
+
+** Modelling Results
+  All models were re-evaluated on the "cleaned" training data (see below). This was in an attempt to make model performance metrics more consistent, so as to make better comparisons.
+
+  Our cleaned training data is made by just removing missing records ([[*Remove missing records]]) and reducing duplicates ([[*Duplicate reduction]]) from the original training set. We determine it better represents the actual observations compared to the unprocessed training set.
+
+   We recorded the following summary statistics for every model.
+   1. Hits, refering to the percentage of correctly classified instances.
+   2. AUROC (Area Under ROC)
+   3. Cost, which was the total cost of the cost-sensitive models' misclassifications.
+
+   #+CAPTION: Equal-cost modeling results
+   #+ATTR_LaTeX: :placement [H]
+   |     |                        |  Hits | AUROC |
+   |-----+------------------------+-------+-------|
+   | NB  | Naïve Bayes            | 57.5% |  0.57 |
+   | kNN | Instance Based Learner | 98.8% |  0.99 |
+   | LR  | Logistic Regression    | 66.8% |  0.58 |
+   | RF  | Random Forests         | 99.5% |  1.00 |
+
+   #+CAPTION: Cost-sensitive modeling results
+   #+ATTR_LaTeX: :placement [H]
+   |     |                        |  Hits | AUROC | Cost   |
+   |-----+------------------------+-------+-------+--------|
+   | NB  | Naïve Bayes            | 32.9% |  0.57 | 13,077 |
+   | kNN | Instance Based Learner | 81.6% |  0.99 | 3710   |
+   | LR  | Logistic Regression    | 33.4% |  0.58 | 13,076 |
+   | RF  | Random Forests         | 71.3% |  0.99 | 5593   |
+
+** Evaluating results
+   The k-Nearest Neighbour and Random Forest equal-cost models evidently are shown to be overfitted to the training data, seeing as they achieve near-perfect classification. We however remained satisfied with our approach, for which we discuss why in appendix [[*Overfitting concerns]].
+
+   We determined the respective k-Nearest Neighbour models for equal-cost and cost-sensitive scenarios were our best models.
+
+   The performance was compared to Random Forests, with the results of the other two models indicating they were not worth considering. We determined it performed cleary worse than kNN in the cost-sensitive scenario, due to the \sim{}50% total cost. For our equal-costs pick, we looked at the \sim{}11% higher correct classifications made in kNN in the cost-sensitive scenario to determine Random Forests as a weaker modeling technique, as the marginal 0.7% advantage in Random Forests for the equal-costs scenario could be attrubited to statistical noise and/or overfitting.
+
+* Final performance
+  | Model              |   Hits | AUROC | Cost |
+  |--------------------+--------+-------+------|
+  | Equal-costs kNN    |  77.3% | 0.727 | 1133 |
+  | Cost-sensitive kNN | 68.66% | 0.786 | 1567 |
+  
+* Conclusion
+  We believe our overall approach to this classification problem was warranted. This leads us to determine that our k-Nearest Neighbour and Random Forests models were performative models, at least relative to how the given problem seemed to be.
+
+  The stark contrast in accuracy when compared with our Naïve Bayes and Logistical Regression models is a cause for concern, however. Further experimentation with preprocessing steps and model parameter-tuning could of seen a big difference, although we also imagine kNN and Random Forest methods simply better model for the classifying pattern at hand.
+
+  We regretted how poorly explored our particular use of class balancing was. We believe the selectiveness of preprocessing steps depending on classifier was well-reasoned, but our hypothesises could of been subject to experiments too.
+
+  We found Weka's tools helpful and easy to use for certain tasks, but some of our needs simply could not be met. This especially pertained to interactions of preprocessing steps with eachother, where possibly beneficial steps such as saving PCA models for later use was impossible. A more involved data mining approach with interactive Python environments and assorted data mining libraries would have allowed us to better express and mold our ideas.
+
+#+LATEX: \newpage
+  
+bibliographystyle:ieeetr
+bibliography:refs.bib
+
+#+LATEX: \newpage
+
+#+LATEX: \appendix
+* Overfitting concerns
+
+  We presumed that class balancing via SMOTE was the primary reason, where the process is not too dissimiliar from crude duplication of existing Positive records. This makes our models, trained on class-balanced data, be readied to perform well for the respective pre-balanced data.
+
+  Ideally we would have randomly split the cleaned training set for a new training/test set pair, and train kNN & RF on differently preprocessed training sets (i.e. class-balanced and class-unbalanced), to then be evaluated using the test set which was completely unseen to the models. The accuracy metrics would give more insight into whether the inherent overfitting of class balancing techniques that up-sample is more beneficial then the other seemingly sub-optimal solutions of down-sampling the majority class or not balancing at all.
+
+  Unfortunately we were pressed for time at this point, so we chose not to attempt this.
+
+  We still determined however that we were modeling for the signal points that represented the underlying pattern to a high degree, where the natural bias of models to the data that trained them was exacerbated by the synthetic creation of new points that reflect already-existing observations. This is more favourable than overfitting noise points, which would entail the underlying pattern being misrepresented.
+
