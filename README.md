@@ -1,4 +1,4 @@
-# Machine learning for Linear B-cell Epitopes
+# Data mining for Linear B-cell Epitopes
 
 This repository pertains to my *CS3440 Data Mining* university coursework
 submission, where we were tasked to explore a [dataset](CW_Data_train.arff) and
