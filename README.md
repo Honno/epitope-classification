@@ -10,4 +10,5 @@ a strange pattern in the data—where duplicate records contained slightly
 different values that obscured basic duplicate analysis tools—I wrote a bespoke
 Python script to generate [analysis](./preprocess/distribution.csv) and
 ultimately reduce duplicate records, available at
-[preprocess/preprocess_data.py](./preprocess/preprocess_data.py).
+[preprocess/preprocess_data.py](./preprocess/preprocess_data.py), and is
+detailed in the report at section 4.2 *Duplicate reduction*.
